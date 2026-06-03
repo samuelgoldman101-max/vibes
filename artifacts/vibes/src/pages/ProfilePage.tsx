@@ -2,7 +2,7 @@ import { useState, useEffect } from "react";
 import { ref, onValue, off, get, set, remove, update } from "firebase/database";
 import { db } from "@/lib/firebase";
 import { useAuth } from "@/contexts/AuthContext";
-import { Heart, MessageCircle, Edit2, Check, X, LogOut, Send, Trash2 } from "lucide-react";
+import { Settings, Heart, MessageCircle, Send, Trash2, MapPin, Calendar, Image } from "lucide-react";
 
 interface Post {
   id: string;
@@ -11,6 +11,7 @@ interface Post {
   username: string;
   avatarColor: string;
   content: string;
+  imageUrl?: string;
   createdAt: number;
   likesCount: number;
   commentsCount: number;
@@ -26,17 +27,6 @@ interface Comment {
   createdAt: number;
 }
 
-function Avatar({ name, color, size = 40 }: { name: string; color: string; size?: number }) {
-  return (
-    <div
-      className="flex items-center justify-center rounded-full font-bold flex-shrink-0 select-none"
-      style={{ width: size, height: size, background: `${color}33`, border: `2px solid ${color}66`, fontSize: size * 0.38, color }}
-    >
-      {name.charAt(0).toUpperCase()}
-    </div>
-  );
-}
-
 function timeAgo(ts: number) {
   const diff = Date.now() - ts;
   const m = Math.floor(diff / 60000);
@@ -49,92 +39,74 @@ function timeAgo(ts: number) {
   return new Date(ts).toLocaleDateString();
 }
 
+function Avatar({ name, color, size = 40 }: { name: string; color: string; size?: number }) {
+  return (
+    <div
+      className="flex items-center justify-center rounded-full font-bold flex-shrink-0 select-none"
+      style={{ width: size, height: size, background: `${color}22`, border: `3px solid ${color}66`, fontSize: size * 0.38, color }}
+    >
+      {name.charAt(0).toUpperCase()}
+    </div>
+  );
+}
+
 function CommentSection({ postId, currentUser, userProfile }: { postId: string; currentUser: any; userProfile: any }) {
   const [comments, setComments] = useState<Comment[]>([]);
   const [text, setText] = useState("");
   const [sending, setSending] = useState(false);
 
   useEffect(() => {
-    const commRef = ref(db, `comments/${postId}`);
-    const unsub = onValue(commRef, snap => {
+    const cRef = ref(db, `comments/${postId}`);
+    const unsub = onValue(cRef, snap => {
       const data = snap.val();
-      const list: Comment[] = data
-        ? Object.entries(data).map(([id, val]: any) => ({ id, ...val })).sort((a, b) => a.createdAt - b.createdAt)
-        : [];
-      setComments(list);
+      setComments(data ? Object.entries(data).map(([id, val]: any) => ({ id, ...val })).sort((a, b) => a.createdAt - b.createdAt) : []);
     });
-    return () => off(commRef, "value", unsub);
+    return () => off(cRef, "value", unsub);
   }, [postId]);
 
-  async function sendComment() {
+  async function send() {
     if (!text.trim() || !currentUser || !userProfile) return;
     setSending(true);
     try {
       await set(ref(db, `comments/${postId}/${Date.now()}`), {
-        uid: currentUser.uid,
-        displayName: userProfile.displayName,
-        username: userProfile.username,
-        avatarColor: userProfile.avatarColor,
-        text: text.trim(),
-        createdAt: Date.now(),
+        uid: currentUser.uid, displayName: userProfile.displayName,
+        username: userProfile.username, avatarColor: userProfile.avatarColor,
+        text: text.trim(), createdAt: Date.now(),
       });
-      const countRef = ref(db, `posts/${postId}/commentsCount`);
-      const snap = await get(countRef);
-      await set(countRef, (snap.val() || 0) + 1);
+      const snap = await get(ref(db, `posts/${postId}/commentsCount`));
+      await set(ref(db, `posts/${postId}/commentsCount`), (snap.val() || 0) + 1);
       setText("");
-    } finally {
-      setSending(false);
-    }
-  }
-
-  async function deleteComment(commentId: string) {
-    await remove(ref(db, `comments/${postId}/${commentId}`));
-    const countRef = ref(db, `posts/${postId}/commentsCount`);
-    const snap = await get(countRef);
-    await set(countRef, Math.max(0, (snap.val() || 1) - 1));
+    } finally { setSending(false); }
   }
 
   return (
-    <div className="border-t border-border mt-3 pt-3 space-y-3">
-      <div className="space-y-2 max-h-48 overflow-y-auto pr-1">
-        {comments.length === 0 && (
-          <p className="text-muted-foreground text-xs text-center py-2">No comments yet. Be first!</p>
-        )}
+    <div className="border-t border-white/5 mt-3 pt-3 space-y-2">
+      <div className="max-h-40 overflow-y-auto space-y-2 pr-1">
+        {comments.length === 0 && <p className="text-white/30 text-xs text-center py-1">No comments yet</p>}
         {comments.map(c => (
-          <div key={c.id} className="flex items-start gap-2 group">
-            <Avatar name={c.displayName} color={c.avatarColor} size={28} />
-            <div className="flex-1 min-w-0">
-              <div className="bg-muted rounded-xl px-3 py-1.5">
-                <span className="font-semibold text-xs text-foreground">{c.displayName} </span>
-                <span className="text-xs text-foreground/90">{c.text}</span>
+          <div key={c.id} className="flex items-start gap-2">
+            <Avatar name={c.displayName} color={c.avatarColor} size={26} />
+            <div className="flex-1">
+              <div className="bg-white/5 rounded-xl px-3 py-1.5">
+                <span className="font-semibold text-xs text-white">{c.displayName} </span>
+                <span className="text-xs text-white/80">{c.text}</span>
               </div>
-              <span className="text-xs text-muted-foreground ml-2">{timeAgo(c.createdAt)}</span>
+              <span className="text-[10px] text-white/30 ml-2">{timeAgo(c.createdAt)}</span>
             </div>
-            {currentUser?.uid === c.uid && (
-              <button
-                onClick={() => deleteComment(c.id)}
-                className="opacity-0 group-hover:opacity-100 text-muted-foreground hover:text-destructive transition-all p-1"
-              >
-                <Trash2 size={12} />
-              </button>
-            )}
           </div>
         ))}
       </div>
       {currentUser && userProfile && (
         <div className="flex items-center gap-2">
-          <Avatar name={userProfile.displayName} color={userProfile.avatarColor} size={28} />
-          <div className="flex-1 flex items-center gap-2 bg-muted rounded-xl px-3 py-1.5">
+          <Avatar name={userProfile.displayName} color={userProfile.avatarColor} size={26} />
+          <div className="flex-1 flex items-center gap-2 bg-white/5 rounded-xl px-3 py-1.5">
             <input
-              type="text"
-              placeholder="Write a comment..."
-              value={text}
-              onChange={e => setText(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && !e.shiftKey && sendComment()}
-              className="flex-1 bg-transparent text-sm outline-none placeholder:text-muted-foreground"
+              type="text" placeholder="Comment..." value={text} onChange={e => setText(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && send()}
+              className="flex-1 bg-transparent text-xs outline-none placeholder:text-white/30"
             />
-            <button onClick={sendComment} disabled={!text.trim() || sending} className="text-primary hover:text-primary/80 disabled:opacity-40 transition-colors">
-              <Send size={14} />
+            <button onClick={send} disabled={!text.trim() || sending} className="text-primary disabled:opacity-30">
+              <Send size={13} />
             </button>
           </div>
         </div>
@@ -146,70 +118,68 @@ function CommentSection({ postId, currentUser, userProfile }: { postId: string; 
 export default function ProfilePage() {
   const { currentUser, userProfile, logOut, refreshProfile } = useAuth();
   const [posts, setPosts] = useState<Post[]>([]);
-  const [editing, setEditing] = useState(false);
+  const [tab, setTab] = useState<"posts" | "media" | "likes">("posts");
+  const [likedPosts, setLikedPosts] = useState<Post[]>([]);
+  const [showSettings, setShowSettings] = useState(false);
   const [newBio, setNewBio] = useState("");
   const [newDisplayName, setNewDisplayName] = useState("");
   const [saving, setSaving] = useState(false);
-  const [likedPostIds, setLikedPostIds] = useState<Set<string>>(new Set());
-  const [postLikeCounts, setPostLikeCounts] = useState<Record<string, number>>({});
-  const [postCommentCounts, setPostCommentCounts] = useState<Record<string, number>>({});
+  const [likedIds, setLikedIds] = useState<Set<string>>(new Set());
+  const [likeCounts, setLikeCounts] = useState<Record<string, number>>({});
+  const [commentCounts, setCommentCounts] = useState<Record<string, number>>({});
   const [openComments, setOpenComments] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     if (!currentUser) return;
-    const postsRef = ref(db, "posts");
-    const unsub = onValue(postsRef, snap => {
+    const pRef = ref(db, "posts");
+    const unsub = onValue(pRef, snap => {
       const data = snap.val();
-      const list: Post[] = data
-        ? Object.entries(data)
-            .map(([id, val]: any) => ({ id, ...val }))
-            .filter((p: Post) => p.uid === currentUser.uid)
-            .sort((a, b) => b.createdAt - a.createdAt)
-        : [];
-      setPosts(list);
+      const all: Post[] = data ? Object.entries(data).map(([id, v]: any) => ({ id, ...v })) : [];
+      setPosts(all.filter(p => p.uid === currentUser.uid).sort((a, b) => b.createdAt - a.createdAt));
+      // For likes tab, fetch separately
+      const likesRef = ref(db, `userLikes/${currentUser.uid}`);
+      get(likesRef).then(lSnap => {
+        const likedData = lSnap.val();
+        if (likedData) {
+          const likedPostIds = new Set(Object.keys(likedData));
+          setLikedIds(likedPostIds);
+          setLikedPosts(all.filter(p => likedPostIds.has(p.id)).sort((a, b) => b.createdAt - a.createdAt));
+        }
+      });
     });
-    return () => off(postsRef, "value", unsub);
+    return () => off(pRef, "value", unsub);
   }, [currentUser]);
 
   useEffect(() => {
     if (!currentUser || posts.length === 0) return;
-    const unsubscribers: (() => void)[] = [];
-    posts.forEach(post => {
+    const unsubs: (() => void)[] = [];
+    [...posts].forEach(post => {
       const likeRef = ref(db, `likes/${post.id}/${currentUser.uid}`);
-      const unsub1 = onValue(likeRef, snap => {
-        setLikedPostIds(prev => {
-          const next = new Set(prev);
-          if (snap.exists()) next.add(post.id); else next.delete(post.id);
-          return next;
-        });
+      const u1 = onValue(likeRef, s => {
+        setLikedIds(prev => { const n = new Set(prev); s.exists() ? n.add(post.id) : n.delete(post.id); return n; });
+        if (s.exists()) set(ref(db, `userLikes/${currentUser.uid}/${post.id}`), true);
+        else remove(ref(db, `userLikes/${currentUser.uid}/${post.id}`));
       });
-      const likesCountRef = ref(db, `posts/${post.id}/likesCount`);
-      const unsub2 = onValue(likesCountRef, snap => {
-        setPostLikeCounts(prev => ({ ...prev, [post.id]: snap.val() || 0 }));
-      });
-      const commentsCountRef = ref(db, `posts/${post.id}/commentsCount`);
-      const unsub3 = onValue(commentsCountRef, snap => {
-        setPostCommentCounts(prev => ({ ...prev, [post.id]: snap.val() || 0 }));
-      });
-      unsubscribers.push(() => off(likeRef, "value", unsub1));
-      unsubscribers.push(() => off(likesCountRef, "value", unsub2));
-      unsubscribers.push(() => off(commentsCountRef, "value", unsub3));
+      const u2 = onValue(ref(db, `posts/${post.id}/likesCount`), s => setLikeCounts(p => ({ ...p, [post.id]: s.val() || 0 })));
+      const u3 = onValue(ref(db, `posts/${post.id}/commentsCount`), s => setCommentCounts(p => ({ ...p, [post.id]: s.val() || 0 })));
+      unsubs.push(() => off(likeRef, "value", u1), () => off(ref(db, `posts/${post.id}/likesCount`), "value", u2), () => off(ref(db, `posts/${post.id}/commentsCount`), "value", u3));
     });
-    return () => unsubscribers.forEach(fn => fn());
+    return () => unsubs.forEach(fn => fn());
   }, [currentUser, posts]);
 
   async function toggleLike(post: Post) {
     if (!currentUser) return;
     const likeRef = ref(db, `likes/${post.id}/${currentUser.uid}`);
-    const postLikesRef = ref(db, `posts/${post.id}/likesCount`);
-    const isLiked = likedPostIds.has(post.id);
-    const count = postLikeCounts[post.id] || 0;
+    const likesRef = ref(db, `posts/${post.id}/likesCount`);
+    const isLiked = likedIds.has(post.id);
     if (isLiked) {
       await remove(likeRef);
-      await set(postLikesRef, Math.max(0, count - 1));
+      await remove(ref(db, `userLikes/${currentUser.uid}/${post.id}`));
+      await set(likesRef, Math.max(0, (likeCounts[post.id] || 0) - 1));
     } else {
       await set(likeRef, true);
-      await set(postLikesRef, count + 1);
+      await set(ref(db, `userLikes/${currentUser.uid}/${post.id}`), true);
+      await set(likesRef, (likeCounts[post.id] || 0) + 1);
     }
   }
 
@@ -217,12 +187,6 @@ export default function ProfilePage() {
     await remove(ref(db, `posts/${postId}`));
     await remove(ref(db, `comments/${postId}`));
     await remove(ref(db, `likes/${postId}`));
-  }
-
-  function startEdit() {
-    setNewBio(userProfile?.bio || "");
-    setNewDisplayName(userProfile?.displayName || "");
-    setEditing(true);
   }
 
   async function saveProfile() {
@@ -234,154 +198,185 @@ export default function ProfilePage() {
         displayName: newDisplayName.trim() || userProfile.displayName,
       });
       await refreshProfile();
-      setEditing(false);
-    } finally {
-      setSaving(false);
-    }
+      setShowSettings(false);
+    } finally { setSaving(false); }
   }
 
-  if (!currentUser || !userProfile) {
-    return <div className="flex items-center justify-center h-64 text-muted-foreground">Sign in to view profile</div>;
+  function PostCard({ post }: { post: Post }) {
+    const liked = likedIds.has(post.id);
+    const likes = likeCounts[post.id] ?? post.likesCount;
+    const comments = commentCounts[post.id] ?? post.commentsCount;
+    const showComments = openComments.has(post.id);
+    return (
+      <div className="bg-white/3 rounded-2xl p-4 fade-in">
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-xs text-white/30">{timeAgo(post.createdAt)}</span>
+          <button onClick={() => deletePost(post.id)} className="text-white/20 hover:text-red-400 transition-colors p-0.5">
+            <Trash2 size={13} />
+          </button>
+        </div>
+        <p className="text-sm text-white/90 whitespace-pre-wrap mb-3">{post.content}</p>
+        {post.imageUrl && <img src={post.imageUrl} alt="" className="w-full rounded-xl object-cover max-h-64 mb-3" />}
+        <div className="flex items-center gap-4">
+          <button onClick={() => toggleLike(post)} className="flex items-center gap-1.5 group">
+            <Heart size={16} className={`transition-all ${liked ? "fill-red-500 text-red-500" : "text-white/30 group-hover:text-red-400"}`} />
+            {likes > 0 && <span className={`text-xs font-medium ${liked ? "text-red-500" : "text-white/30"}`}>{likes}</span>}
+          </button>
+          <button
+            onClick={() => setOpenComments(prev => { const n = new Set(prev); n.has(post.id) ? n.delete(post.id) : n.add(post.id); return n; })}
+            className="flex items-center gap-1.5 text-white/30 hover:text-primary transition-colors"
+          >
+            <MessageCircle size={16} />
+            {comments > 0 && <span className="text-xs font-medium">{comments}</span>}
+          </button>
+        </div>
+        {showComments && <CommentSection postId={post.id} currentUser={currentUser} userProfile={userProfile} />}
+      </div>
+    );
   }
+
+  if (!currentUser || !userProfile) return null;
+
+  const joinYear = new Date(userProfile.createdAt).getFullYear();
 
   return (
-    <div className="max-w-lg mx-auto px-4 py-4 space-y-4">
-      {/* Profile card */}
-      <div className="bg-card border border-border rounded-2xl p-5">
-        <div className="flex items-start justify-between mb-4">
-          <div className="story-ring">
-            <div
-              className="flex items-center justify-center rounded-full text-white font-black"
-              style={{
-                width: 72,
-                height: 72,
-                background: `${userProfile.avatarColor}22`,
-                border: `3px solid ${userProfile.avatarColor}`,
-                fontSize: 28,
-                color: userProfile.avatarColor,
-              }}
-            >
-              {userProfile.displayName.charAt(0).toUpperCase()}
-            </div>
-          </div>
-          <div className="flex items-center gap-2">
-            {!editing ? (
-              <>
-                <button onClick={startEdit} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-foreground border border-border rounded-lg px-3 py-1.5 transition-colors">
-                  <Edit2 size={12} /> Edit
-                </button>
-                <button onClick={logOut} className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive border border-border rounded-lg px-3 py-1.5 transition-colors">
-                  <LogOut size={12} /> Sign out
-                </button>
-              </>
-            ) : (
-              <>
-                <button onClick={saveProfile} disabled={saving} className="flex items-center gap-1.5 text-xs text-green-400 border border-green-400/30 rounded-lg px-3 py-1.5 hover:bg-green-400/10 transition-colors">
-                  <Check size={12} /> {saving ? "Saving..." : "Save"}
-                </button>
-                <button onClick={() => setEditing(false)} className="flex items-center gap-1.5 text-xs text-muted-foreground border border-border rounded-lg px-3 py-1.5 transition-colors">
-                  <X size={12} /> Cancel
-                </button>
-              </>
-            )}
+    <div className="bg-[#0d0d12] min-h-screen">
+      {/* Banner */}
+      <div
+        className="h-36 relative"
+        style={{ background: `linear-gradient(135deg, hsl(291 95% 55%), hsl(267 80% 55%), hsl(320 90% 60%))` }}
+      >
+        <button
+          onClick={() => { setNewBio(userProfile.bio || ""); setNewDisplayName(userProfile.displayName); setShowSettings(true); }}
+          className="absolute top-4 right-4 w-9 h-9 rounded-full bg-black/20 backdrop-blur-sm flex items-center justify-center text-white/80 hover:bg-black/40 transition-colors"
+        >
+          <Settings size={18} />
+        </button>
+      </div>
+
+      {/* Avatar + info */}
+      <div className="px-4 pb-4">
+        <div className="flex items-start justify-between -mt-9 mb-4">
+          <div
+            className="w-[72px] h-[72px] rounded-full flex items-center justify-center font-black text-2xl border-4 border-[#0d0d12] flex-shrink-0"
+            style={{ background: userProfile.avatarColor + "22", color: userProfile.avatarColor, borderColor: "#0d0d12" }}
+          >
+            {userProfile.displayName.charAt(0).toUpperCase()}
           </div>
         </div>
 
-        {editing ? (
-          <div className="space-y-3">
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">Display Name</label>
-              <input
-                type="text"
-                value={newDisplayName}
-                onChange={e => setNewDisplayName(e.target.value)}
-                className="vibe-input w-full px-3 py-2 text-sm"
-              />
-            </div>
-            <div>
-              <label className="block text-xs text-muted-foreground mb-1">Bio</label>
-              <textarea
-                value={newBio}
-                onChange={e => setNewBio(e.target.value)}
-                placeholder="Tell people about yourself..."
-                maxLength={150}
-                className="vibe-input w-full px-3 py-2 text-sm resize-none min-h-[70px]"
-              />
-              <div className="text-xs text-muted-foreground text-right mt-0.5">{newBio.length}/150</div>
-            </div>
-          </div>
-        ) : (
-          <>
-            <div className="font-bold text-lg">{userProfile.displayName}</div>
-            <div className="text-sm text-muted-foreground mb-2">@{userProfile.username}</div>
-            {userProfile.bio && <p className="text-sm text-foreground/80">{userProfile.bio}</p>}
-          </>
-        )}
+        <div className="mb-3">
+          <h2 className="text-xl font-bold text-white">{userProfile.displayName}</h2>
+          <p className="text-sm text-white/40">@@{userProfile.username}</p>
+          <p className="text-sm text-white/70 mt-2">{userProfile.bio || "No bio yet."}</p>
+        </div>
 
-        <div className="flex gap-4 mt-4 pt-4 border-t border-border">
-          <div className="text-center">
-            <div className="font-bold text-lg">{posts.length}</div>
-            <div className="text-xs text-muted-foreground">Posts</div>
+        <div className="flex items-center gap-4 mb-4">
+          <div className="flex items-center gap-1.5 text-xs text-white/30">
+            <MapPin size={12} />
+            <span>Internet</span>
+          </div>
+          <div className="flex items-center gap-1.5 text-xs text-white/30">
+            <Calendar size={12} />
+            <span>Joined {joinYear}</span>
+          </div>
+        </div>
+
+        <div className="flex gap-6 border-b border-white/5 pb-4">
+          <div>
+            <span className="font-bold text-white text-base">0</span>
+            <span className="text-xs text-white/40 ml-1">Following</span>
+          </div>
+          <div>
+            <span className="font-bold text-white text-base">0</span>
+            <span className="text-xs text-white/40 ml-1">Followers</span>
+          </div>
+          <div>
+            <span className="font-bold text-white text-base">{posts.length}</span>
+            <span className="text-xs text-white/40 ml-1">Posts</span>
           </div>
         </div>
       </div>
 
-      {/* Posts */}
-      <div className="space-y-4">
-        {posts.length === 0 ? (
-          <div className="text-center py-12 text-muted-foreground">
-            <div className="text-4xl mb-3">📝</div>
-            <p className="font-medium">No posts yet</p>
-            <p className="text-sm">Share your first vibe on the feed!</p>
+      {/* Tabs */}
+      <div className="flex border-b border-white/5 px-4 mb-4">
+        {(["posts", "media", "likes"] as const).map(t => (
+          <button
+            key={t}
+            onClick={() => setTab(t)}
+            className={`flex-1 py-3 text-sm font-semibold capitalize transition-all ${tab === t ? "text-primary border-b-2 border-primary" : "text-white/30 hover:text-white/60"}`}
+          >
+            {t}
+          </button>
+        ))}
+      </div>
+
+      {/* Tab content */}
+      <div className="px-4 space-y-3 pb-24">
+        {tab === "posts" && (
+          posts.length === 0
+            ? <p className="text-center text-white/30 text-sm py-8">No posts to show yet.</p>
+            : posts.map(p => <PostCard key={p.id} post={p} />)
+        )}
+        {tab === "media" && (
+          <div>
+            {posts.filter(p => p.imageUrl).length === 0
+              ? <p className="text-center text-white/30 text-sm py-8">No media posts yet.</p>
+              : (
+                <div className="grid grid-cols-3 gap-1">
+                  {posts.filter(p => p.imageUrl).map(p => (
+                    <img key={p.id} src={p.imageUrl} alt="" className="w-full aspect-square object-cover rounded-lg" />
+                  ))}
+                </div>
+              )}
           </div>
-        ) : (
-          posts.map(post => {
-            const liked = likedPostIds.has(post.id);
-            const likesCount = postLikeCounts[post.id] ?? post.likesCount;
-            const commentsCount = postCommentCounts[post.id] ?? post.commentsCount;
-            const showComments = openComments.has(post.id);
-            return (
-              <div key={post.id} className="bg-card border border-border rounded-2xl p-4 fade-in">
-                <div className="flex items-start gap-3 mb-3">
-                  <Avatar name={post.displayName} color={userProfile.avatarColor} size={36} />
-                  <div className="flex-1">
-                    <div className="text-xs text-muted-foreground">{timeAgo(post.createdAt)}</div>
-                  </div>
-                  <button onClick={() => deletePost(post.id)} className="text-muted-foreground hover:text-destructive transition-colors p-1">
-                    <Trash2 size={14} />
-                  </button>
-                </div>
-                <p className="text-sm text-foreground/90 whitespace-pre-wrap mb-3">{post.content}</p>
-                <div className="flex items-center gap-4">
-                  <button onClick={() => toggleLike(post)} className="flex items-center gap-1.5 text-sm group">
-                    <Heart
-                      size={18}
-                      className={`transition-all ${liked ? "fill-red-500 text-red-500" : "text-muted-foreground group-hover:text-red-400"}`}
-                    />
-                    <span className={`font-medium ${liked ? "text-red-500" : "text-muted-foreground"}`}>
-                      {likesCount > 0 ? likesCount : ""}
-                    </span>
-                  </button>
-                  <button
-                    onClick={() => setOpenComments(prev => {
-                      const next = new Set(prev);
-                      if (next.has(post.id)) next.delete(post.id); else next.add(post.id);
-                      return next;
-                    })}
-                    className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-primary transition-colors"
-                  >
-                    <MessageCircle size={18} />
-                    <span className="font-medium">{commentsCount > 0 ? commentsCount : ""}</span>
-                  </button>
-                </div>
-                {showComments && (
-                  <CommentSection postId={post.id} currentUser={currentUser} userProfile={userProfile} />
-                )}
+        )}
+        {tab === "likes" && (
+          likedPosts.length === 0
+            ? <p className="text-center text-white/30 text-sm py-8">No liked posts yet.</p>
+            : likedPosts.map(p => <PostCard key={p.id} post={p} />)
+        )}
+      </div>
+
+      {/* Settings Modal */}
+      {showSettings && (
+        <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-sm flex items-end">
+          <div className="w-full bg-[#16151f] rounded-t-3xl p-6 pb-10 fade-in">
+            <h3 className="font-bold text-lg text-white mb-5">Edit Profile</h3>
+            <div className="space-y-3 mb-5">
+              <div>
+                <label className="text-xs text-white/40 mb-1.5 block">Display Name</label>
+                <input
+                  type="text"
+                  value={newDisplayName}
+                  onChange={e => setNewDisplayName(e.target.value)}
+                  className="vibe-input w-full px-4 py-3 text-sm"
+                />
               </div>
-            );
-          })
-        )}
-      </div>
+              <div>
+                <label className="text-xs text-white/40 mb-1.5 block">Bio</label>
+                <textarea
+                  value={newBio}
+                  onChange={e => setNewBio(e.target.value)}
+                  placeholder="Tell people about yourself..."
+                  maxLength={150}
+                  className="vibe-input w-full px-4 py-3 text-sm resize-none min-h-[80px]"
+                />
+                <div className="text-right text-xs text-white/30 mt-0.5">{newBio.length}/150</div>
+              </div>
+            </div>
+            <div className="flex gap-3 mb-3">
+              <button onClick={() => setShowSettings(false)} className="flex-1 py-3 rounded-xl border border-white/10 text-white/60 text-sm font-semibold">Cancel</button>
+              <button onClick={saveProfile} disabled={saving} className="flex-1 py-3 btn-gradient rounded-xl text-white text-sm font-bold disabled:opacity-40">
+                {saving ? "Saving..." : "Save"}
+              </button>
+            </div>
+            <button onClick={logOut} className="w-full py-3 rounded-xl border border-red-500/30 text-red-400 text-sm font-semibold hover:bg-red-500/10 transition-colors">
+              Sign Out
+            </button>
+          </div>
+        </div>
+      )}
     </div>
   );
 }
