@@ -1,0 +1,11 @@
+[build]
+  command = "pnpm --filter @workspace/vibes run build"
+  publish = "artifacts/vibes/dist/public"
+
+[build.environment]
+  BASE_PATH = "/"
+
+[[redirects]]
+  from = "/*"
+  to = "/index.html"
+  status = 200
