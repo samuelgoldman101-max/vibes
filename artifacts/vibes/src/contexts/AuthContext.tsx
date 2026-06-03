@@ -10,7 +10,7 @@ import {
 import { ref, set, get } from "firebase/database";
 import { auth, db } from "@/lib/firebase";
 
-interface UserProfile {
+export interface UserProfile {
   uid: string;
   username: string;
   displayName: string;
@@ -44,10 +44,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const [loading, setLoading] = useState(true);
 
   async function fetchProfile(uid: string) {
-    const snap = await get(ref(db, `users/${uid}`));
-    if (snap.exists()) {
-      setUserProfile(snap.val() as UserProfile);
+    try {
+      const snap = await get(ref(db, `users/${uid}`));
+      if (snap.exists()) {
+        setUserProfile(snap.val() as UserProfile);
+        return snap.val() as UserProfile;
+      }
+    } catch (e) {
+      console.error("fetchProfile error", e);
     }
+    return null;
   }
 
   async function signUp(email: string, password: string, username: string, displayName: string) {
