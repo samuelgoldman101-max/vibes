@@ -1,0 +1,57 @@
+name: Deploy to GitHub Pages
+
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: true
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 10
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Build
+        run: pnpm --filter @workspace/vibes run build
+        env:
+          BASE_PATH: /vibes/
+          VITE_FIREBASE_API_KEY: AIzaSyBksB29mgNOPU9q5IymANWkzP99gsV8mL0
+          VITE_FIREBASE_AUTH_DOMAIN: vibes-9753c.firebaseapp.com
+          VITE_FIREBASE_DATABASE_URL: https://vibes-9753c-default-rtdb.firebaseio.com
+          VITE_FIREBASE_PROJECT_ID: vibes-9753c
+          VITE_FIREBASE_STORAGE_BUCKET: vibes-9753c.firebasestorage.app
+          VITE_FIREBASE_MESSAGING_SENDER_ID: "124418785661"
+          VITE_FIREBASE_APP_ID: 1:124418785661:web:789c0f253ae3bb39580c14
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: artifacts/vibes/dist/public
+
+      - uses: actions/deploy-pages@v4
+        id: deployment
